@@ -1,0 +1,34 @@
+# This pipeline lints Terraform code. It does not apply any infrastructure.
+# Requirements:
+#   - AWS_DEFAULT_REGION enviornment variable 
+#   - VAULT_ADDR enviornment variable 
+# 
+# Stolen from here:
+# https://github.com/terraform-aws-modules/terraform-aws-vpc/blob/master/.circleci/config.yml
+
+pipelines:
+    default:
+      - step:
+          name: Validate configuration
+          image: hashicorp/terraform:0.12.29
+          script:
+            - mkdir ~/.terraform.d; echo $TF_CREDS > ~/.terraform.d/credentials.tfrc.json 
+            # terraform init in all TF directories
+            - find . -type f -name "*.tf" -exec dirname {} \;|sort -u | while read m; do (cd "$m" && terraform init -input=false -backend=false) || exit 1; done
+            # terraform validate in all TF directories
+            - find . -name ".terraform" -prune -o -type f -name "*.tf" -exec dirname {} \;|sort -u | while read m; do (cd "$m" && terraform validate && echo "√ $m") || exit 1 ; done
+            # Check if files needs to be formated
+            - if [[ -n "$(terraform fmt -write=false)" ]]; then echo "Some terraform files need be formatted, run 'terraform fmt' to fix"; exit 1; fi
+    pull-requests:
+      '**': 
+        - step:
+            name: Validate configuration
+            image: hashicorp/terraform:0.12.29
+            script:
+              - mkdir ~/.terraform.d; echo $TF_CREDS > ~/.terraform.d/credentials.tfrc.json
+              # terraform init in all TF directories
+              - find . -type f -name "*.tf" -exec dirname {} \;|sort -u | while read m; do (cd "$m" && terraform init -input=false -backend=false) || exit 1; done
+              # terraform validate in all TF directories
+              - find . -name ".terraform" -prune -o -type f -name "*.tf" -exec dirname {} \;|sort -u | while read m; do (cd "$m" && terraform validate && echo "√ $m") || exit 1 ; done
+              # Check if files needs to be formated
+              - if [[ -n "$(terraform fmt -write=false)" ]]; then echo "Some terraform files need be formatted, run 'terraform fmt' to fix"; exit 1; fi
